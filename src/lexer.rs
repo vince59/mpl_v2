@@ -69,6 +69,18 @@ impl Lexer {
         }
     }
 
+    //save the state of the lexer
+    fn save_state(&self) -> (usize, usize, usize) {
+        (self.i, self.pos.col, self.pos.line)
+    }
+
+    // restore the state of the lexer
+    fn restore_state(&mut self, (i, col, line): (usize, usize, usize)) {
+        self.i = i;
+        self.pos.col = col;
+        self.pos.line = line;
+    }
+
     // get the next char in the source file
     fn get_next_char(&mut self) -> char {
         let c = self.src_text.chars().nth(self.i).unwrap_or('\0');
@@ -81,6 +93,7 @@ impl Lexer {
         c
     }
 
+    
     // skip n next char in the source file
     fn bump(&mut self, nb: usize) {
         for _ in 0..nb {
@@ -101,6 +114,21 @@ impl Lexer {
         if word.is_empty() { None } else { Some(word) }
     }
 
+    // get the next word in the source file, but only if it is of the given length (do not consume the word)
+    fn try_next_word_len(&mut self, nb : usize) -> Option<String> {
+        let (i_tmp, col_tmp, line_tmp) = self.save_state();
+        let mut word = String::new();
+        for _ in 0..nb {
+            let c = self.get_next_char();
+            if c == '\0' || c == ' ' || c == '\n' || c == '\r' || c == '\t' {
+                break;
+            }
+            word.push(c);
+        }
+        self.restore_state( (i_tmp, col_tmp, line_tmp) );
+        if word.is_empty() { None } else { Some(word) }
+    }
+    
     // identify the token
     fn identify_token(&mut self, word: &String) -> Option<Token> {
         match Token::from_str(&*word) {
@@ -184,12 +212,70 @@ impl Lexer {
         }
     }
 
+    fn try_string(&mut self) -> Result<Option<String>, LexError> {
+        let symbol = self.try_next_word_len(1);
+        if let Some(symbol) = symbol {
+            if symbol == "\"" {
+                self.bump(1);
+                let mut str = String::new();
+                loop {
+                    let c = self.get_next_char();
+                    match c {   
+                        '\0' => {
+                            return Err(LexError {
+                                message: "Unclosed string".to_string(),
+                                pos: self.pos.clone(),
+                            });
+                        },
+                        '"' => {
+                            self.bump(1);
+                            break;
+                        },
+                        _ => {
+                            str.push(c);
+                        }   
+                    }
+                }
+                Ok(Some(str))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+    
+    // check if the end of the file is reached
+    #[inline]
+    fn eof(&self) -> bool {
+        self.i >= self.src_text.len()
+    }
+
     pub fn parse(&mut self) -> Result<&Vec<Token>, LexError> {
         self.src_text = fs::read_to_string(&self.src_filename)?;
         loop {
             self.skip_whitespace();
             self.skip_comment_single_line();
             self.skip_comment_multiple_line()?;
+            // end of file
+            if self.eof() {
+                self.token_stream.push(Token::Eof);
+                break;
+            }
+            // identify string
+            if let Some(str) = self.try_string()? {
+                self.token_stream.push(Token::Str(str))
+            }
+            // identify symbols
+            let symbol = self.try_next_word_len(1);
+            if let Some(word_str) = symbol {
+                match self.identify_token(&word_str) {
+                    Some(token) => {self.token_stream.push(token); self.bump(1);},
+                    _ => {}
+                }
+            }
+            
+            // identify keyword
             let word = self.get_next_word();
             if let Some(word_str) = word {
                 match self.identify_token(&word_str) {
@@ -202,6 +288,7 @@ impl Lexer {
                     }
                 }
             } else {
+                self.token_stream.push(Token::Eof);
                 break; // No more words to process
             }
         }

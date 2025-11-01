@@ -15,7 +15,7 @@ import
  nl
  local
  true
- false
+ false "toto va à la plage"
  int
  float
  let
@@ -23,10 +23,7 @@ import
  to
  step
  next
- break
-
- (
- )
+ break ()
  {
  }
  ,
