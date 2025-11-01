@@ -1,0 +1,14 @@
+mod lexer;
+mod token;
+
+use std::env;
+use lexer::Lexer;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = env::args();
+    let _program = args.next(); // skip program name
+    let src_filename = args.next().ok_or_else(|| "Usage: mpl <source_filename>")?; // get source filename
+    let mut lex  = Lexer::new(src_filename); // create lexer
+    let tokens = lex.parse()?; // get tokens from lexer
+    println!("Parsed {} tokens : {:?} ", tokens.len(), tokens);
+    Ok(())
+}
