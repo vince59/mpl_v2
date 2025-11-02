@@ -16,7 +16,7 @@ fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     let _program = args.next(); // skip program name
     let src_filename = args.next().ok_or_else(|| "Usage: mpl <source_filename>")?; // get source filename
     let mut lex  = Lexer::new(src_filename); // create lexer
-    let tokens = lex.parse()?; // get tokens from lexer
-    println!("Parsed {} tokens : {:?} ", tokens.len(), tokens);
+    let token_stream = lex.get_all_token()?; // get tokens from lexer
+    println!("{}", token_stream);
     Ok(())
 }

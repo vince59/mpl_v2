@@ -1,9 +1,35 @@
 use crate::token::Token;
 use std::fs;
+use std::fmt;
 use std::str::FromStr;
 
+#[derive(Debug)]
+pub struct LexToken {
+    pub token: Token,
+    pub pos: Position,
+}
+
+impl fmt::Display for LexToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}:{} [{:?}]\n", self.pos.file_name, self.pos.line, self.pos.col, self.token)
+    }
+}
+
+pub struct TokenStream {
+    tokens: Vec<LexToken>,
+}
+
+// Display all tokens in the token stream
+impl fmt::Display for TokenStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, token) in self.tokens.iter().enumerate() {
+            write!(f, "{} -> {}", i+1, token)?;
+        }
+        Ok(())
+    }
+}
+
 // Lexer error
-// Position in a source file
 #[derive(Debug, Clone)]
 pub struct Position {
     pub file_name: String, // source file name
@@ -52,7 +78,6 @@ impl From<std::io::Error> for LexError {
 pub struct Lexer {
     src_filename: String, // mpl source filename
     src_text: String,
-    token_stream: Vec<Token>, // all tokens found in the source file
     pos: Position,
     i: usize, // current index in the source file
 }
@@ -62,7 +87,6 @@ impl Lexer {
         let filename = src_filename.clone();
         Self {
             src_filename,
-            token_stream: Vec::new(),
             src_text: String::new(),
             pos: Position::new(filename),
             i: 0,
@@ -88,7 +112,7 @@ impl Lexer {
         self.i += 1;
         if c == '\n' {
             self.pos.line += 1;
-            self.pos.col = 0;
+            self.pos.col = 1;
         }
         c
     }
@@ -103,12 +127,16 @@ impl Lexer {
     // get the next word in the source file
     fn get_next_word(&mut self) -> Option<String> {
         let mut word = String::new();
+        let (mut i_tmp, mut col_tmp, mut line_tmp) = self.save_state();
         loop {
             let c = self.get_next_char();
             if c == '\0' || c == ' ' || c == '\n' || c == '\r' || c == '\t' {
                 break;
             }
-            word.push(c);
+            match self.identify_token(&c.to_string()) {
+                Some(token) => { self.restore_state( (i_tmp, col_tmp, line_tmp) ); break; },
+                None => {word.push(c); (i_tmp, col_tmp, line_tmp) = self.save_state();}
+            }
         }
         if word.is_empty() { None } else { Some(word) }
     }
@@ -221,13 +249,17 @@ impl Lexer {
         let mut word = String::new();
         let (i_tmp, col_tmp, line_tmp) = self.save_state();
         let c = self.get_next_char();
+        let (mut i_tmp2, mut col_tmp2, mut line_tmp2) = self.save_state();
         if Self::is_digit(c) {
             let mut c = c; // Use the first character we already read
             while c != '\0' {
                 if c == ' ' || c == '\n' || c == '\r' || c == '\t' {
                     break;
                 }
-                word.push(c);
+                match self.identify_token(&c.to_string()) {
+                    Some(token) => { self.restore_state( (i_tmp2, col_tmp2, line_tmp2) ); break; },
+                    None => {word.push(c); (i_tmp2, col_tmp2, line_tmp2) = self.save_state();}
+                }
                 c = self.get_next_char();
             }
             Some(word)
@@ -252,7 +284,7 @@ impl Lexer {
                     });
                 }
                 if c == '"' {
-                    self.get_next_char();
+                    //self.get_next_char();
                     return Ok(Some(str));
                 } else {
                     str.push(c);
@@ -293,50 +325,56 @@ impl Lexer {
         valid
     }
 
-    pub fn parse(&mut self) -> Result<&Vec<Token>, LexError> {
+    pub fn get_all_token(&mut self) -> Result<TokenStream, LexError> {
         self.src_text = fs::read_to_string(&self.src_filename)?;
+        let mut tokens = Vec::new();
         loop {
             self.skip_whitespace();
             self.skip_comment_single_line();
             self.skip_comment_multiple_line()?;
+            let pos = self.pos.clone();
             // end of file
             if self.eof() {
-                self.token_stream.push(Token::Eof);
+                tokens.push(LexToken { token: Token::Eof, pos });
                 break;
             }
             // identify string
             if let Some(str) = self.try_string()? {
-                self.token_stream.push(Token::Str(str));
+                tokens.push(LexToken { token: Token::Str(str), pos });
                 continue;
             }
-
             // identify symbols
             match self.try_symbol() {
                 Some(token) => {
-                    self.token_stream.push(token);
+                    tokens.push(LexToken { token, pos });
                     continue;
                 }
                 _ => {}
             }
-
             // identify number
             if let Some(word_str) = self.try_number() {
                 if word_str.contains('.') {
-                    self.token_stream
-                        .push(Token::Float(word_str.parse::<f64>().map_err(|_| {
-                            LexError {
-                                message: format!("invalid float number format [{}]", word_str),
-                                pos: self.pos.clone(),
-                            }
-                        })?));
+                    tokens
+                        .push(LexToken {
+                            token: Token::Float(word_str.parse::<f64>().map_err(|_| {
+                                LexError {
+                                    message: format!("invalid float number format [{}]", word_str),
+                                    pos: pos.clone(),
+                                }
+                            })?),
+                            pos,
+                        });
                 } else {
-                    self.token_stream
-                        .push(Token::Integer(word_str.parse::<i32>().map_err(|_| {
-                            LexError {
-                                message: format!("invalid integer format [{}]", word_str),
-                                pos: self.pos.clone(),
-                            }
-                        })?));
+                    tokens
+                        .push(LexToken {
+                            token: Token::Integer(word_str.parse::<i32>().map_err(|_| {
+                                LexError {
+                                    message: format!("invalid integer format [{}]", word_str),
+                                    pos: pos.clone(),
+                                }
+                            })?),
+                            pos,
+                        });
                 }
                 continue;
             }
@@ -345,23 +383,24 @@ impl Lexer {
             if let Some(word_str) = word {
                 match self.identify_token(&word_str) {
                     Some(token) => {
-                        self.token_stream.push(token);
+                        tokens.push(LexToken { token: token, pos });
                         continue;
                     }
                     None => {
                         if self.is_ident_valid(&word_str) {
-                            self.token_stream.push(Token::Ident(word_str));
+                            tokens.push(LexToken { token: Token::Ident(word_str), pos });
                             continue;
                         } else {
                             return Err(LexError {
                                 message: format!("Unknown token [{}]", word_str),
-                                pos: self.pos.clone(),
+                                pos,
                             });
                         }
                     }
                 }
             }
         }
-        Ok(&self.token_stream)
+        let token_stream = TokenStream { tokens };
+        Ok(token_stream)
     }
 }
