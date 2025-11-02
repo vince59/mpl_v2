@@ -212,6 +212,37 @@ impl Lexer {
         }
     }
 
+    // check if a char is a digit or a dot
+    #[inline]
+    fn is_digit(ch: char) -> bool {
+        if ch == '.' {true} else  {ch.is_ascii_digit()}
+    }
+
+    fn try_number(&mut self) -> Option<String> {
+        let mut word = String::new();
+        let symbol = self.try_next_word_len(1);
+        if let Some(symbol) = symbol {
+            if let Some(c) = symbol.chars().next() {
+                if Self::is_digit(c) {
+                    loop {
+                        let c = self.get_next_char();
+                        if Self::is_digit(c) {
+                            word.push(c);
+                        } else {
+                            return Some(word);
+                        }
+                    }
+                }
+                else {
+                    return None;
+                }
+            }
+        } else {
+            return None;
+        }
+        None
+    }
+
     fn try_string(&mut self) -> Result<Option<String>, LexError> {
         let symbol = self.try_next_word_len(1);
         if let Some(symbol) = symbol {
@@ -264,17 +295,34 @@ impl Lexer {
             }
             // identify string
             if let Some(str) = self.try_string()? {
-                self.token_stream.push(Token::Str(str))
+                self.token_stream.push(Token::Str(str));
+                continue;
             }
             // identify symbols
             let symbol = self.try_next_word_len(1);
             if let Some(word_str) = symbol {
                 match self.identify_token(&word_str) {
-                    Some(token) => {self.token_stream.push(token); self.bump(1);},
+                    Some(token) => {self.token_stream.push(token); self.bump(1); continue},
                     _ => {}
                 }
             }
-            
+            println!("av {} {}",self.pos.col,self.pos.line);
+            // identify number
+            if let Some(word_str) = self.try_number() {
+                println!("ap {} {}",self.pos.col,self.pos.line);
+                if word_str.contains('.') {
+                    self.token_stream.push(Token::Float(word_str.parse::<f64>().map_err(|_| LexError {
+                        message: format!("invalid float number format [{}]", word_str),
+                        pos: self.pos.clone(),
+                    })?));
+                } else {
+                    self.token_stream.push(Token::Integer(word_str.parse::<i32>().map_err(|_| LexError {
+                        message: format!("invalid integer format [{}]", word_str),
+                        pos: self.pos.clone(),
+                    })?));
+                }
+                continue;
+            }
             // identify keyword
             let word = self.get_next_word();
             if let Some(word_str) = word {
@@ -282,14 +330,11 @@ impl Lexer {
                     Some(token) => self.token_stream.push(token),
                     None => {
                         return Err(LexError {
-                            message: format!("Unknown token {}", word_str),
+                            message: format!("Unknown token [{}]", word_str),
                             pos: self.pos.clone(),
                         });
                     }
                 }
-            } else {
-                self.token_stream.push(Token::Eof);
-                break; // No more words to process
             }
         }
         Ok(&self.token_stream)
