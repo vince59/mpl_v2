@@ -11,7 +11,7 @@ import
  print
  println
  call
- to_str
+ to_str aa
  nl
  local
  true
@@ -30,5 +30,5 @@ import
  +
  -
  *
- / 0.2 07 .0 2. /* */
+ / 0.2 07 .0 2. /* */ bb
 

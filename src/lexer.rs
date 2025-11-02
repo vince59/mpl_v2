@@ -282,6 +282,29 @@ impl Lexer {
         self.i >= self.src_text.len()
     }
 
+    // check if the word is a valid identifier, must start with a letter
+    #[inline]
+    fn is_ident_valid(&self, word: &String) -> bool {
+        let mut valid = true;
+        match word.chars().next() {
+            Some(c) => {
+                if !c.is_ascii_alphabetic()  {
+                    valid = false;
+                }
+            },
+            None => {
+                valid = false;
+            }
+        }
+        for c in word.chars() {
+            if !c.is_ascii_alphanumeric() && c != '_' {
+                valid = false;
+                break;
+            }
+        }
+        valid
+    }
+
     pub fn parse(&mut self) -> Result<&Vec<Token>, LexError> {
         self.src_text = fs::read_to_string(&self.src_filename)?;
         loop {
@@ -306,10 +329,8 @@ impl Lexer {
                     _ => {}
                 }
             }
-            println!("av {} {}",self.pos.col,self.pos.line);
             // identify number
             if let Some(word_str) = self.try_number() {
-                println!("ap {} {}",self.pos.col,self.pos.line);
                 if word_str.contains('.') {
                     self.token_stream.push(Token::Float(word_str.parse::<f64>().map_err(|_| LexError {
                         message: format!("invalid float number format [{}]", word_str),
@@ -327,12 +348,15 @@ impl Lexer {
             let word = self.get_next_word();
             if let Some(word_str) = word {
                 match self.identify_token(&word_str) {
-                    Some(token) => self.token_stream.push(token),
-                    None => {
+                    Some(token) => {self.token_stream.push(token); continue},
+                    None => { if self.is_ident_valid(&word_str) {
+                        self.token_stream.push(Token::Ident(word_str));
+                        continue;
+                    } else {
                         return Err(LexError {
                             message: format!("Unknown token [{}]", word_str),
                             pos: self.pos.clone(),
-                        });
+                        });}
                     }
                 }
             }
