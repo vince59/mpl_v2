@@ -113,19 +113,19 @@ impl Lexer {
         if word.is_empty() { None } else { Some(word) }
     }
 
-    // get the next word in the source file, but only if it is of the given length (do not consume the word)
-    fn try_next_word_len(&mut self, nb: usize) -> Option<String> {
+    // try to identify a symbol (one char only)
+    fn try_symbol(&mut self) -> Option<Token> {
         let (i_tmp, col_tmp, line_tmp) = self.save_state();
         let mut word = String::new();
-        for _ in 0..nb {
-            let c = self.get_next_char();
-            if c == '\0' || c == ' ' || c == '\n' || c == '\r' || c == '\t' {
-                break;
+        let c = self.get_next_char();
+        word.push(c);
+        match self.identify_token(&word) {
+            None => {
+                self.restore_state((i_tmp, col_tmp, line_tmp));
+                None
             }
-            word.push(c);
+            Some(token) => Some(token),
         }
-        self.restore_state((i_tmp, col_tmp, line_tmp));
-        if word.is_empty() { None } else { Some(word) }
     }
 
     // identify the token
@@ -252,7 +252,7 @@ impl Lexer {
                     });
                 }
                 if c == '"' {
-                    c = self.get_next_char();
+                    self.get_next_char();
                     return Ok(Some(str));
                 } else {
                     str.push(c);
@@ -309,18 +309,16 @@ impl Lexer {
                 self.token_stream.push(Token::Str(str));
                 continue;
             }
+
             // identify symbols
-            let symbol = self.try_next_word_len(1);
-            if let Some(word_str) = symbol {
-                match self.identify_token(&word_str) {
-                    Some(token) => {
-                        self.token_stream.push(token);
-                        self.bump(1);
-                        continue;
-                    }
-                    _ => {}
+            match self.try_symbol() {
+                Some(token) => {
+                    self.token_stream.push(token);
+                    continue;
                 }
+                _ => {}
             }
+
             // identify number
             if let Some(word_str) = self.try_number() {
                 if word_str.contains('.') {
