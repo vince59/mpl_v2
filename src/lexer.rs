@@ -32,7 +32,7 @@ impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            " Token error : {}\n in file {}\n at line {}\n col {}\n",
+            "Token error : [{}] at {} line:col -> ({}:{})\n",
             self.message, self.pos.file_name, self.pos.line, self.pos.col
         )
     }
@@ -93,7 +93,6 @@ impl Lexer {
         c
     }
 
-    
     // skip n next char in the source file
     fn bump(&mut self, nb: usize) {
         for _ in 0..nb {
@@ -115,7 +114,7 @@ impl Lexer {
     }
 
     // get the next word in the source file, but only if it is of the given length (do not consume the word)
-    fn try_next_word_len(&mut self, nb : usize) -> Option<String> {
+    fn try_next_word_len(&mut self, nb: usize) -> Option<String> {
         let (i_tmp, col_tmp, line_tmp) = self.save_state();
         let mut word = String::new();
         for _ in 0..nb {
@@ -125,10 +124,10 @@ impl Lexer {
             }
             word.push(c);
         }
-        self.restore_state( (i_tmp, col_tmp, line_tmp) );
+        self.restore_state((i_tmp, col_tmp, line_tmp));
         if word.is_empty() { None } else { Some(word) }
     }
-    
+
     // identify the token
     fn identify_token(&mut self, word: &String) -> Option<Token> {
         match Token::from_str(&*word) {
@@ -168,13 +167,13 @@ impl Lexer {
         }
     }
 
+    // skip comment multiple line
     fn skip_comment_multiple_line(&mut self) -> Result<(), LexError> {
         let mut close = true; // by default, the comment is closed (case of no comment)
         if let Some(look_ahead) = self.look_ahead(2) {
             // look ahead 2 chars
             if look_ahead == "/*" {
-                close=false; // the comment is not closed yet
-                // comment start
+                // Removing the attribute from the expression
                 self.bump(2); // skip /*
                 loop {
                     // loop until the comment is closed
@@ -215,67 +214,56 @@ impl Lexer {
     // check if a char is a digit or a dot
     #[inline]
     fn is_digit(ch: char) -> bool {
-        if ch == '.' {true} else  {ch.is_ascii_digit()}
+        if ch == '.' { true } else { ch.is_ascii_digit() }
     }
 
     fn try_number(&mut self) -> Option<String> {
         let mut word = String::new();
-        let symbol = self.try_next_word_len(1);
-        if let Some(symbol) = symbol {
-            if let Some(c) = symbol.chars().next() {
-                if Self::is_digit(c) {
-                    loop {
-                        let c = self.get_next_char();
-                        if Self::is_digit(c) {
-                            word.push(c);
-                        } else {
-                            return Some(word);
-                        }
-                    }
+        let (i_tmp, col_tmp, line_tmp) = self.save_state();
+        let c = self.get_next_char();
+        if Self::is_digit(c) {
+            let mut c = c; // Use the first character we already read
+            while c != '\0' {
+                if c == ' ' || c == '\n' || c == '\r' || c == '\t' {
+                    break;
                 }
-                else {
-                    return None;
-                }
+                word.push(c);
+                c = self.get_next_char();
             }
+            Some(word)
         } else {
-            return None;
+            self.restore_state((i_tmp, col_tmp, line_tmp));
+            None
         }
-        None
     }
 
+    // try to identify a string
     fn try_string(&mut self) -> Result<Option<String>, LexError> {
-        let symbol = self.try_next_word_len(1);
-        if let Some(symbol) = symbol {
-            if symbol == "\"" {
-                self.bump(1);
-                let mut str = String::new();
-                loop {
-                    let c = self.get_next_char();
-                    match c {   
-                        '\0' => {
-                            return Err(LexError {
-                                message: "Unclosed string".to_string(),
-                                pos: self.pos.clone(),
-                            });
-                        },
-                        '"' => {
-                            self.bump(1);
-                            break;
-                        },
-                        _ => {
-                            str.push(c);
-                        }   
-                    }
+        let mut str = String::new();
+        let (i_tmp, col_tmp, line_tmp) = self.save_state();
+        let c = self.get_next_char();
+        if c == '"' {
+            let mut c = self.get_next_char();
+            while c != '\0' {
+                if c == '\n' || c == '\r' {
+                    return Err(LexError {
+                        message: "Unclosed string".to_string(),
+                        pos: self.pos.clone(),
+                    });
                 }
-                Ok(Some(str))
-            } else {
-                Ok(None)
+                if c == '"' {
+                    c = self.get_next_char();
+                    return Ok(Some(str));
+                } else {
+                    str.push(c);
+                    c = self.get_next_char();
+                }
             }
-        } else {
-            Ok(None)
         }
+        self.restore_state((i_tmp, col_tmp, line_tmp));
+        Ok(None)
     }
-    
+
     // check if the end of the file is reached
     #[inline]
     fn eof(&self) -> bool {
@@ -288,10 +276,10 @@ impl Lexer {
         let mut valid = true;
         match word.chars().next() {
             Some(c) => {
-                if !c.is_ascii_alphabetic()  {
+                if !c.is_ascii_alphabetic() {
                     valid = false;
                 }
-            },
+            }
             None => {
                 valid = false;
             }
@@ -325,38 +313,53 @@ impl Lexer {
             let symbol = self.try_next_word_len(1);
             if let Some(word_str) = symbol {
                 match self.identify_token(&word_str) {
-                    Some(token) => {self.token_stream.push(token); self.bump(1); continue},
+                    Some(token) => {
+                        self.token_stream.push(token);
+                        self.bump(1);
+                        continue;
+                    }
                     _ => {}
                 }
             }
             // identify number
             if let Some(word_str) = self.try_number() {
                 if word_str.contains('.') {
-                    self.token_stream.push(Token::Float(word_str.parse::<f64>().map_err(|_| LexError {
-                        message: format!("invalid float number format [{}]", word_str),
-                        pos: self.pos.clone(),
-                    })?));
+                    self.token_stream
+                        .push(Token::Float(word_str.parse::<f64>().map_err(|_| {
+                            LexError {
+                                message: format!("invalid float number format [{}]", word_str),
+                                pos: self.pos.clone(),
+                            }
+                        })?));
                 } else {
-                    self.token_stream.push(Token::Integer(word_str.parse::<i32>().map_err(|_| LexError {
-                        message: format!("invalid integer format [{}]", word_str),
-                        pos: self.pos.clone(),
-                    })?));
+                    self.token_stream
+                        .push(Token::Integer(word_str.parse::<i32>().map_err(|_| {
+                            LexError {
+                                message: format!("invalid integer format [{}]", word_str),
+                                pos: self.pos.clone(),
+                            }
+                        })?));
                 }
                 continue;
             }
-            // identify keyword
+            // identify keyword or an identifier
             let word = self.get_next_word();
             if let Some(word_str) = word {
                 match self.identify_token(&word_str) {
-                    Some(token) => {self.token_stream.push(token); continue},
-                    None => { if self.is_ident_valid(&word_str) {
-                        self.token_stream.push(Token::Ident(word_str));
+                    Some(token) => {
+                        self.token_stream.push(token);
                         continue;
-                    } else {
-                        return Err(LexError {
-                            message: format!("Unknown token [{}]", word_str),
-                            pos: self.pos.clone(),
-                        });}
+                    }
+                    None => {
+                        if self.is_ident_valid(&word_str) {
+                            self.token_stream.push(Token::Ident(word_str));
+                            continue;
+                        } else {
+                            return Err(LexError {
+                                message: format!("Unknown token [{}]", word_str),
+                                pos: self.pos.clone(),
+                            });
+                        }
                     }
                 }
             }

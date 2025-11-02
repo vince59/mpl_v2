@@ -17,18 +17,18 @@ import
  true
  false "toto va à la plage"
  int
- float
+ float //test
  let
  for
  to
  step
  next
- break ()
+ break (+-/)
  {
  }
  ,
  +
  -
  *
- / 0.2 07 .0 2. /* */ bb
+ / 0.2 07 .0 2.  bb aa_bb_cc123 1
 
