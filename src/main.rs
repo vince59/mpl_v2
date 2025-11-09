@@ -3,7 +3,6 @@ mod token;
 mod parser;
 
 use std::env;
-use lexer::Lexer;
 use parser::Parser;
 
 fn main() {

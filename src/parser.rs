@@ -1,5 +1,4 @@
-use crate::lexer::{LexError, Lexer, Position, TokenStream};
-use crate::parser::ParseError::Lex;
+use crate::lexer::{LexError, Lexer, Position};
 use crate::token::Token;
 
 pub struct Parser {

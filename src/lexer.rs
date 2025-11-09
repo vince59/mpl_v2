@@ -1,9 +1,10 @@
-use crate::token::Token;
-use std::fs;
-use std::fmt;
-use std::path::{Path, MAIN_SEPARATOR};
 use std::cmp::Reverse;
+use std::fmt;
+use std::fs;
+use std::path::{Path, MAIN_SEPARATOR};
 use std::str::FromStr;
+
+use crate::token::Token;
 
 #[derive(Debug, Clone)]
 pub struct LexToken {
@@ -372,7 +373,7 @@ impl Lexer {
     }
 
     fn parse(&mut self, pos: Option<Position>) -> Result<Vec<LexToken>, LexError> {
-        self.src_text = fs::read_to_string(&self.src_filename).map_err(|e|LexError{
+        self.src_text = fs::read_to_string(&self.src_filename).map_err(|_|LexError{
             message:format!("File not found {}",self.src_filename.clone()),
             pos:pos.unwrap()
         })?;
