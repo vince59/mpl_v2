@@ -1,0 +1,1 @@
+ print("Data types :",nl, "i = ",to_str(i),nl,"f = ",to_str(f),nl)

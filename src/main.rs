@@ -1,8 +1,10 @@
 mod lexer;
 mod token;
+mod parser;
 
 use std::env;
 use lexer::Lexer;
+use parser::Parser;
 
 fn main() {
     if let Err(e) = real_main() {
@@ -15,8 +17,7 @@ fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args();
     let _program = args.next(); // skip program name
     let src_filename = args.next().ok_or_else(|| "Usage: mpl <source_filename>")?; // get source filename
-    let mut lex  = Lexer::new(src_filename); // create lexer
-    let token_stream = lex.get_all_token()?; // get tokens from lexer
-    println!("{}", token_stream);
+    let p = Parser::new(src_filename);
+    p.parse()?;
     Ok(())
 }

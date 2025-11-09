@@ -1,5 +1,5 @@
 use strum_macros::EnumString;
-#[derive(Debug, PartialEq, EnumString)]
+#[derive(Clone,Debug, PartialEq, EnumString)]
 pub enum Token {
     #[strum(serialize = "import")]
     Import,

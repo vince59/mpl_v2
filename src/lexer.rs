@@ -1,9 +1,11 @@
 use crate::token::Token;
 use std::fs;
 use std::fmt;
+use std::path::{Path, MAIN_SEPARATOR};
+use std::cmp::Reverse;
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LexToken {
     pub token: Token,
     pub pos: Position,
@@ -16,7 +18,7 @@ impl fmt::Display for LexToken {
 }
 
 pub struct TokenStream {
-    tokens: Vec<LexToken>,
+    pub tokens: Vec<LexToken>,
 }
 
 // Display all tokens in the token stream
@@ -58,7 +60,7 @@ impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Token error : [{}] at {} line:col -> ({}:{})\n",
+            "Token error : [{}] at {} ({}:{})\n",
             self.message, self.pos.file_name, self.pos.line, self.pos.col
         )
     }
@@ -134,7 +136,7 @@ impl Lexer {
                 break;
             }
             match self.identify_token(&c.to_string()) {
-                Some(token) => { self.restore_state( (i_tmp, col_tmp, line_tmp) ); break; },
+                Some(_) => { self.restore_state( (i_tmp, col_tmp, line_tmp) ); break; },
                 None => {word.push(c); (i_tmp, col_tmp, line_tmp) = self.save_state();}
             }
         }
@@ -257,7 +259,7 @@ impl Lexer {
                     break;
                 }
                 match self.identify_token(&c.to_string()) {
-                    Some(token) => { self.restore_state( (i_tmp2, col_tmp2, line_tmp2) ); break; },
+                    Some(_) => { self.restore_state( (i_tmp2, col_tmp2, line_tmp2) ); break; },
                     None => {word.push(c); (i_tmp2, col_tmp2, line_tmp2) = self.save_state();}
                 }
                 c = self.get_next_char();
@@ -325,8 +327,56 @@ impl Lexer {
         valid
     }
 
-    pub fn get_all_token(&mut self) -> Result<TokenStream, LexError> {
-        self.src_text = fs::read_to_string(&self.src_filename)?;
+    fn get_import_list(tokens: &Vec<LexToken>) -> Result<Vec<(usize,String)>, LexError> {
+        let mut imports: Vec<(usize, String)> = Vec::new();
+        let mut k=0usize;
+        for (i,t) in tokens.windows(2).enumerate() {
+            let (cur, next) = (&t[0], &t[1]);
+            if cur.token == Token::Import {
+                if let Token::Str(ref s) = next.token {
+                    if !imports.iter().any(|(_, exist)| *exist == *s) {
+                        if k > 0 {
+                            let previous_import_index = imports[k - 1].0;
+                            let imports_are_not_consecutive = (previous_import_index + 2) != i;
+                            if imports_are_not_consecutive {
+                                return Err(LexError {
+                                    message: format!("import can't be after instruction"),
+                                    pos: next.pos.clone(),
+                                });
+                            }
+                        }
+                        k+=1;
+                        imports.push((i,s.clone()));
+                    } else {
+                        return Err(LexError {
+                                message: format!("import {} already defined", s),
+                                pos: next.pos.clone(),
+                            }
+                        );
+                    }
+                } else {
+                    return Err(LexError {
+                        message: format!("import must be a string"),
+                        pos: next.pos.clone(),
+                    });
+                }
+            }
+        }
+       Ok(imports)
+    }
+
+    fn parse_file(filename: &String,pos: Option<Position>) -> Result<Vec<LexToken>, LexError> {
+        let mut lexer = Lexer::new(filename.clone());
+        let tokens = lexer.parse(pos)?;
+        Ok(tokens)
+    }
+
+    fn parse(&mut self, pos: Option<Position>) -> Result<Vec<LexToken>, LexError> {
+        self.src_text = fs::read_to_string(&self.src_filename).map_err(|e|LexError{
+            message:format!("File not found {}",self.src_filename.clone()),
+            pos:pos.unwrap()
+        })?;
+
         let mut tokens = Vec::new();
         loop {
             self.skip_whitespace();
@@ -400,7 +450,30 @@ impl Lexer {
                 }
             }
         }
+        Ok(tokens)
+    }
+
+    fn dir_with_sep(path: &str) -> Option<String> {
+        let mut s = Path::new(path).parent()?.to_string_lossy().into_owned();
+        if !s.ends_with(MAIN_SEPARATOR) {
+            s.push(MAIN_SEPARATOR);
+        }
+        Some(s)
+    }
+    pub fn tokenize(&mut self) -> Result<TokenStream, LexError> {
+        let mut tokens = Self::parse_file(&self.src_filename,None)?; // Parse the main file
+        let working_path=Self::dir_with_sep(&self.src_filename).unwrap_or_else(|| ".".to_string());
+        let mut imports = Self::get_import_list(&tokens)?; // Check imports
+        imports.sort_by_key(|(i, _)| Reverse(*i));// Sort imports by index from the largest index to the smallest
+        for (i,import_filename) in imports { // Tokenize each imported file
+            let import_name = working_path.clone() + &import_filename;
+            let mut imp_tokens = Self::parse_file(&import_name, Some(tokens[i].pos.clone()))?;
+            imp_tokens.pop(); // remove the eof token
+            // remove import and file name from the main program and insert all the tokens in the import file
+            tokens.splice(i..=i+1, imp_tokens);
+        }
         let token_stream = TokenStream { tokens };
+        println!("{}", token_stream);
         Ok(token_stream)
     }
 }
