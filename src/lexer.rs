@@ -474,7 +474,6 @@ impl Lexer {
             tokens.splice(i..=i+1, imp_tokens);
         }
         let token_stream = TokenStream { tokens };
-        println!("{}", token_stream);
         Ok(token_stream)
     }
 }

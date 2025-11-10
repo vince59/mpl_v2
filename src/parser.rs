@@ -53,31 +53,4 @@ impl Parser {
         lex.tokenize()?;
         Ok(())
     }
-/*
-    pub fn get_import_list(&self) -> Result<Vec<String>, ParseError> {
-        let mut imports = Vec::new();
-        for t in self.token_stream.tokens.windows(2) {
-            let (cur, next) = (&t[0], &t[1]);
-            if cur.token == Token::Import {
-                if let Token::Str(s) = &next.token {
-                    if imports.contains(s) {
-                        return Err(Lex(
-                            LexError {
-                                message: format!("import {} already defined", s),
-                                pos: next.pos.clone(),
-                            }
-                        ));
-                    } else {imports.push(s.clone())}
-                } else {
-                    return Err(ParseError::Unexpected {
-                        found: next.token.clone(),
-                        expected: "string (path to import)",
-                        pos: next.pos.clone(),
-                    });
-                }
-            }
-        }
-        Ok(imports)
-    }
-    */
 }
