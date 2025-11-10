@@ -254,14 +254,23 @@ impl Lexer {
         let c = self.get_next_char();
         let (mut i_tmp2, mut col_tmp2, mut line_tmp2) = self.save_state();
         if Self::is_digit(c) {
+            if c == '.' {
+                let n = self.src_text.chars().nth(self.i).unwrap_or('\0');
+                println!(">>>{}",n);
+                if !n.is_ascii_digit() {
+                    println!("KO");
+                    self.restore_state((i_tmp, col_tmp, line_tmp));
+                    return None;
+                }
+            }
             let mut c = c; // Use the first character we already read
             while c != '\0' {
                 if c == ' ' || c == '\n' || c == '\r' || c == '\t' {
                     break;
                 }
                 match self.identify_token(&c.to_string()) {
+                    None | Some(Token::Dot) => {word.push(c); (i_tmp2, col_tmp2, line_tmp2) = self.save_state();}
                     Some(_) => { self.restore_state( (i_tmp2, col_tmp2, line_tmp2) ); break; },
-                    None => {word.push(c); (i_tmp2, col_tmp2, line_tmp2) = self.save_state();}
                 }
                 c = self.get_next_char();
             }
@@ -398,14 +407,6 @@ impl Lexer {
                 tokens.push(LexToken { token: Token::Str(str), pos });
                 continue;
             }
-            // identify symbols
-            match self.try_symbol() {
-                Some(token) => {
-                    tokens.push(LexToken { token, pos });
-                    continue;
-                }
-                _ => {}
-            }
             // identify number
             if let Some(word_str) = self.try_number() {
                 if word_str.contains('.') {
@@ -433,6 +434,16 @@ impl Lexer {
                 }
                 continue;
             }
+
+            // identify symbols
+            match self.try_symbol() {
+                Some(token) => {
+                    tokens.push(LexToken { token, pos });
+                    continue;
+                }
+                _ => {}
+            }
+
             // identify keyword or an identifier
             let word = self.get_next_word();
             if let Some(word_str) = word {

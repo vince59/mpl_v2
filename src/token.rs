@@ -23,6 +23,10 @@ pub enum Token {
     Float(f64),
     #[strum(serialize = "to_str")]
     ToStr,
+    #[strum(serialize = "[")]
+    LBracket,
+    #[strum(serialize = "]")]
+    RBracket,
     #[strum(serialize = "(")]
     LParen,
     #[strum(serialize = ")")]
@@ -41,6 +45,10 @@ pub enum Token {
     Star,
     #[strum(serialize = "/")]
     Slash,
+    #[strum(serialize = ":")]
+    Colon,
+    #[strum(serialize = ".")]
+    Dot,
     #[strum(serialize = "nl")]
     Nl,
     #[strum(serialize = "local")]
