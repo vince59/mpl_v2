@@ -59,6 +59,8 @@ impl Parser {
     pub fn parse(&mut self, main_src_filename: String) -> Result<(), ParseError>{
         let mut lex = Lexer::new(main_src_filename);
         self.tokens=lex.tokenize()?;
+        let ts = TokenStream { tokens: self.tokens.clone() };
+        println!("{}",ts);
         self.parse_program()?;
         Ok(())
     }

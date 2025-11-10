@@ -274,29 +274,33 @@ impl Lexer {
 
     // try to identify a string
     fn try_string(&mut self) -> Result<Option<String>, LexError> {
-        let mut str = String::new();
+        // English: Remember current position; if it's not a quote, we roll back.
         let (i_tmp, col_tmp, line_tmp) = self.save_state();
-        let c = self.get_next_char();
-        if c == '"' {
-            let mut c = self.get_next_char();
-            while c != '\0' {
-                if c == '\n' || c == '\r' {
+
+        let start = self.get_next_char();
+        if start != '"' && start != '\'' {
+            self.restore_state((i_tmp, col_tmp, line_tmp));
+            return Ok(None);
+        }
+
+        // English: Use the opening quote as the required closing delimiter.
+        let quote = start;
+        let mut out = String::new();
+        let err_pos = self.pos.clone(); // English: position to report if unclosed
+
+        loop {
+            let c = self.get_next_char();
+            match c {
+                '\0' | '\n' | '\r' => {
                     return Err(LexError {
                         message: "Unclosed string".to_string(),
-                        pos: self.pos.clone(),
-                    });
+                        pos: err_pos,
+                    })
                 }
-                if c == '"' {
-                    //self.get_next_char();
-                    return Ok(Some(str));
-                } else {
-                    str.push(c);
-                    c = self.get_next_char();
-                }
+                _ if c == quote => return Ok(Some(out)),
+                _ => out.push(c),
             }
         }
-        self.restore_state((i_tmp, col_tmp, line_tmp));
-        Ok(None)
     }
 
     // check if the end of the file is reached
