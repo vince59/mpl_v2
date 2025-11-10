@@ -350,9 +350,9 @@ impl Lexer {
                         imports.push((i,s.clone()));
                     } else {
                         return Err(LexError {
-                                message: format!("import {} already defined", s),
-                                pos: next.pos.clone(),
-                            }
+                            message: format!("import {} already defined", s),
+                            pos: next.pos.clone(),
+                        }
                         );
                     }
                 } else {
@@ -363,7 +363,7 @@ impl Lexer {
                 }
             }
         }
-       Ok(imports)
+        Ok(imports)
     }
 
     fn parse_file(filename: &String,pos: Option<Position>) -> Result<Vec<LexToken>, LexError> {
@@ -461,7 +461,7 @@ impl Lexer {
         }
         Some(s)
     }
-    pub fn tokenize(&mut self) -> Result<TokenStream, LexError> {
+    pub fn tokenize(&mut self) -> Result<Vec<LexToken>, LexError> {
         let mut tokens = Self::parse_file(&self.src_filename,None)?; // Parse the main file
         let working_path=Self::dir_with_sep(&self.src_filename).unwrap_or_else(|| ".".to_string());
         let mut imports = Self::get_import_list(&tokens)?; // Check imports
@@ -473,7 +473,6 @@ impl Lexer {
             // remove import and file name from the main program and insert all the tokens in the import file
             tokens.splice(i..=i+1, imp_tokens);
         }
-        let token_stream = TokenStream { tokens };
-        Ok(token_stream)
+        Ok(tokens)
     }
 }

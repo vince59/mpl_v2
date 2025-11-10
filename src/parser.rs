@@ -1,8 +1,11 @@
-use crate::lexer::{LexError, Lexer, Position};
+use std::{fmt,error};
+
+use crate::lexer::{LexError, LexToken, Lexer, Position, TokenStream};
 use crate::token::Token;
 
+
 pub struct Parser {
-    src_filename: String, // mpl source filename
+    tokens: Vec<LexToken>
 }
 
 #[derive(Debug)]
@@ -21,9 +24,9 @@ impl From<LexError> for ParseError {
     }
 }
 
-// Format how a lex error is displayed
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+// Format how a parsing error is displayed
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lex(e) => write!(f, "{}", e),
             Self::Unexpected {
@@ -39,18 +42,24 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-impl std::error::Error for ParseError {}
+impl error::Error for ParseError {}
 
 impl Parser {
-    pub fn new(src_filename: String) -> Self {
+    pub fn new() -> Self {
         Self {
-            src_filename,
+            tokens: Vec::new()
         }
     }
 
-    pub fn parse(&self) -> Result<(), ParseError>{
-        let mut lex = Lexer::new(self.src_filename.clone());
-        lex.tokenize()?;
+    fn parse_program(&mut self) -> Result<(), ParseError> {
+        
+        Ok(())
+    }
+
+    pub fn parse(&mut self, main_src_filename: String) -> Result<(), ParseError>{
+        let mut lex = Lexer::new(main_src_filename);
+        self.tokens=lex.tokenize()?;
+        self.parse_program()?;
         Ok(())
     }
 }

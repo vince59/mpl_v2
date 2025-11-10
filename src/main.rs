@@ -15,8 +15,8 @@ fn main() {
 fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args();
     let _program = args.next(); // skip program name
-    let src_filename = args.next().ok_or_else(|| "Usage: mpl <source_filename>")?; // get source filename
-    let p = Parser::new(src_filename);
-    p.parse()?;
+    let main_src_filename = args.next().ok_or_else(|| "Usage: mpl <source_filename>")?; // get source filename
+    let mut p = Parser::new();
+    p.parse(main_src_filename)?;
     Ok(())
 }
